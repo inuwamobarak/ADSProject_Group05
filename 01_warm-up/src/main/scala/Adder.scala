@@ -90,17 +90,46 @@ class FullAdder extends Module{
 class FourBitAdder extends Module{
 
   val io = IO(new Bundle {
-    /* 
-     * TODO: Define IO ports of a 4-bit ripple-carry-adder as presented in the lecture
-     */
+    // Inputs: two 4-bit numbers
+    val a  = Input(UInt(4.W))
+    val b  = Input(UInt(4.W))
+    // Outputs: 4-bit sum and 1-bit carry out
+    val s  = Output(UInt(4.W))  // sum
+    val co = Output(Bool())      // carry out
     })
 
-  /* 
-   * TODO: Instanciate the full adders and one half adderbased on the previously defined classes
-   */
+  // Instantiate components
+  val ha = Module(new HalfAdder)           // for bit 0
+  val fa0 = Module(new FullAdder)          // for bit 1
+  val fa1 = Module(new FullAdder)          // for bit 2
+  val fa2 = Module(new FullAdder)          // for bit 3
 
-
-  /* 
-   * TODO: Describe output behaviour based on the input values and the internal 
-   */
+  // Connect the half adder (bit 0 - LSB)
+  ha.io.a := io.a(0)
+  ha.io.b := io.b(0)
+  // io.s(0) := ha.io.s
+  
+  // Connect first full adder (bit 1)
+  fa0.io.a := io.a(1)
+  fa0.io.b := io.b(1)
+  fa0.io.ci := ha.io.co  // carry from half adder
+  // io.s(1) := fa0.io.s
+  
+  // Connect second full adder (bit 2)
+  fa1.io.a := io.a(2)
+  fa1.io.b := io.b(2)
+  fa1.io.ci := fa0.io.co  // carry from previous full adder
+  // io.s(2) := fa1.io.s
+  
+  // Connect third full adder (bit 3 - MSB)
+  fa2.io.a := io.a(3)
+  fa2.io.b := io.b(3)
+  fa2.io.ci := fa1.io.co  // carry from previous full adder
+  // io.s(3) := fa2.io.s
+  
+  // Concatenate outputs (MSB first) into 4-bit sum
+  io.s := Cat(fa2.io.s, fa1.io.s, fa0.io.s, ha.io.s)
+  
+  // Final carry out
+  io.co := fa2.io.co
 }
