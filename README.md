@@ -36,7 +36,7 @@
   <h3 align="center">
   ADS I Class Project
   <br />
-  Group #XXX
+  Group 05
   <br />
   Winter Semester 2025/2026
   </h3>
@@ -133,7 +133,7 @@ git clone https://github.com/<your-account>/ADSProject
 * Run the following command to create a new branch that starts from the exact state as the main branch you're currently on.
 * Replace 'XXX' with your group number:
 ```sh
-git checkout -b <GroupXXX>
+git checkout -b <Group05>
 ```
 
 4. Pushing the New Branch to your Fork on GitHub
