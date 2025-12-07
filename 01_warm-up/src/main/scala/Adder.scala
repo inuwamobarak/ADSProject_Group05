@@ -49,20 +49,31 @@ class HalfAdder extends Module{
 class FullAdder extends Module{
 
   val io = IO(new Bundle {
-    /* 
-     * TODO: Define IO ports of a half adder as presented in the lecture
-     */
+    // Inputs: two 1-bit numbers and carry in
+    val a  = Input(Bool())
+    val b  = Input(Bool())
+    val ci = Input(Bool())  // carry in
+    // Outputs: sum and carry out
+    val s  = Output(Bool())  // sum
+    val co = Output(Bool())  // carry out
     })
 
 
-  /* 
-   * TODO: Instanciate the two half adders you want to use based on your HalfAdder class
-   */
+  // Instantiate two half adders
+  val ha1 = Module(new HalfAdder)
+  val ha2 = Module(new HalfAdder)
 
+  // Connect first half adder
+  ha1.io.a := io.a
+  ha1.io.b := io.b
+  
+  // Connect second half adder
+  ha2.io.a := ha1.io.s        // sum from first HA
+  ha2.io.b := io.ci           // carry in
 
-  /* 
-   * TODO: Describe output behaviour based on the input values and the internal signals
-   */
+  // Final outputs
+  io.s  := ha2.io.s           // sum from second HA
+  io.co := ha1.io.co | ha2.io.co  // carry out if either HA has carry
 
 }
 
