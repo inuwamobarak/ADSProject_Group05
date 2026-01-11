@@ -72,5 +72,9 @@ class ALU extends Module {
       // Signed comparison
       io.aluResult := (io.operandA.asSInt < io.operandB.asSInt).asUInt
     }
+    is(ALUOp.SLTU) {
+      // Unsigned comparison
+      io.aluResult := (io.operandA < io.operandB).asUInt
+    }   
   }
 }

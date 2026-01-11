@@ -516,7 +516,59 @@ class ALUSltTest extends AnyFlatSpec with ChiselScalatestTester {
       dut.io.operation.poke(ALUOp.SLT)
       dut.io.aluResult.expect(1.U)  // 0 < 1
       dut.clock.step(1)
-      
+
+
+    }
+  }
+}
+
+// Test SLTU operation (unsigned comparison)
+class ALUSltuTest extends AnyFlatSpec with ChiselScalatestTester {
+  "ALU_Sltu_Tester" should "test SLTU operation" in {
+    test(new ALU).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+      dut.clock.setTimeout(0)
+
+      // Basic unsigned comparison
+      dut.io.operandA.poke(10.U)
+      dut.io.operandB.poke(20.U)
+      dut.io.operation.poke(ALUOp.SLTU)
+      dut.io.aluResult.expect(1.U)  // 10 < 20
+      dut.clock.step(1)
+
+      // Test with high bit set (treat as unsigned, not negative)
+      dut.io.operandA.poke("h80000000".U)  // Large unsigned: 2147483648
+      dut.io.operandB.poke("h00000001".U)  // Small unsigned: 1
+      dut.io.operation.poke(ALUOp.SLTU)
+      dut.io.aluResult.expect(0.U)  // 2147483648 > 1
+      dut.clock.step(1)
+
+      // Same test but for SLT (signed) comparison
+      dut.io.operandA.poke("h80000000".U)  // Signed: -2147483648
+      dut.io.operandB.poke("h00000001".U)  // Signed: 1
+      dut.io.operation.poke(ALUOp.SLT)
+      dut.io.aluResult.expect(1.U)  // -2147483648 < 1 (signed)
+      dut.clock.step(1)
+
+      // Equal numbers
+      dut.io.operandA.poke("hdeadbeef".U)
+      dut.io.operandB.poke("hdeadbeef".U)
+      dut.io.operation.poke(ALUOp.SLTU)
+      dut.io.aluResult.expect(0.U)  // Not less than
+      dut.clock.step(1)
+
+      // Near overflow boundary
+      dut.io.operandA.poke("hfffffffe".U)  // 4294967294
+      dut.io.operandB.poke("hffffffff".U)  // 4294967295
+      dut.io.operation.poke(ALUOp.SLTU)
+      dut.io.aluResult.expect(1.U)  // 4294967294 < 4294967295
+      dut.clock.step(1)
+
+      // Test max unsigned vs zero
+      dut.io.operandA.poke("hffffffff".U)
+      dut.io.operandB.poke(0.U)
+      dut.io.operation.poke(ALUOp.SLTU)
+      dut.io.aluResult.expect(0.U)  // Max > 0
+      dut.clock.step(1)
 
     }
   }
