@@ -49,6 +49,8 @@ class ALU extends Module {
     is(ALUOp.AND) {
       io.aluResult := io.operandA & io.operandB
     }
-  }  
-
+    is(ALUOp.OR) {
+      io.aluResult := io.operandA | io.operandB
+    }
+  }
 }
