@@ -14,7 +14,7 @@ import chisel3.experimental.ChiselEnum
 //ToDo: define AluOp Enum
 object ALUOp extends ChiselEnum {
   val ADD  = Value(0.U)
-  // val SUB  = Value(1.U)
+  val SUB  = Value(1.U)
   // val AND  = Value(2.U)
   // val OR   = Value(3.U)
   // val XOR  = Value(4.U)
@@ -42,6 +42,9 @@ class ALU extends Module {
   switch(io.operation) {
     is(ALUOp.ADD) {
       io.aluResult := io.operandA + io.operandB
+    }
+    is(ALUOp.SUB) {
+      io.aluResult := io.operandA - io.operandB
     }
   }  
 
