@@ -183,3 +183,41 @@ class ALUOrTest extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 }
+
+// Test XOR operation
+class ALUXorTest extends AnyFlatSpec with ChiselScalatestTester {
+  "ALU_Xor_Tester" should "test XOR operation" in {
+    test(new ALU).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+      dut.clock.setTimeout(0)
+
+      // Basic XOR
+      dut.io.operandA.poke("haa".U)
+      dut.io.operandB.poke("h55".U)
+      dut.io.operation.poke(ALUOp.XOR)
+      dut.io.aluResult.expect("hff".U)  // aa ^ 55 = ff
+      dut.clock.step(1)
+
+      // XOR with same value (should be zero)
+      dut.io.operandA.poke("hdeadbeef".U)
+      dut.io.operandB.poke("hdeadbeef".U)
+      dut.io.operation.poke(ALUOp.XOR)
+      dut.io.aluResult.expect(0.U)
+      dut.clock.step(1)
+
+      // XOR with all ones (bitwise NOT)
+      dut.io.operandA.poke("h12345678".U)
+      dut.io.operandB.poke("hffffffff".U)
+      dut.io.operation.poke(ALUOp.XOR)
+      dut.io.aluResult.expect("hedcba987".U)  // bitwise NOT of operandA
+      dut.clock.step(1)
+
+      // Test toggle bits
+      dut.io.operandA.poke("h0000ffff".U)
+      dut.io.operandB.poke("hffff0000".U)
+      dut.io.operation.poke(ALUOp.XOR)
+      dut.io.aluResult.expect("hffffffff".U)
+      dut.clock.step(1)
+
+    }
+  }
+}
