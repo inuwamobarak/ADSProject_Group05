@@ -15,15 +15,15 @@ import chisel3.experimental.ChiselEnum
 object ALUOp extends ChiselEnum {
   val ADD  = Value(0.U)
   val SUB  = Value(1.U)
-  // val AND  = Value(2.U)
-  // val OR   = Value(3.U)
-  // val XOR  = Value(4.U)
-  // val SLL  = Value(5.U)
-  // val SRL  = Value(6.U)
-  // val SRA  = Value(7.U)
-  // val SLT  = Value(8.U)
-  // val SLTU = Value(9.U)
-  // val PASSB = Value(10.U)
+  val AND  = Value(2.U)
+  val OR   = Value(3.U)
+  val XOR  = Value(4.U)
+  val SLL  = Value(5.U)
+  val SRL  = Value(6.U)
+  val SRA  = Value(7.U)
+  val SLT  = Value(8.U)
+  val SLTU = Value(9.U)
+  val PASSB = Value(10.U)
 }
 class ALU extends Module {
   
@@ -45,6 +45,9 @@ class ALU extends Module {
     }
     is(ALUOp.SUB) {
       io.aluResult := io.operandA - io.operandB
+    }
+    is(ALUOp.AND) {
+      io.aluResult := io.operandA & io.operandB
     }
   }  
 
