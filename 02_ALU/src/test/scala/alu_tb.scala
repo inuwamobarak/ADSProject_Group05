@@ -573,3 +573,25 @@ class ALUSltuTest extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 }
+
+// Test PASSB operation
+class ALUPassbTest extends AnyFlatSpec with ChiselScalatestTester {
+  "ALU_Passb_Tester" should "test PASSB operation" in {
+    test(new ALU).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+      dut.clock.setTimeout(0)
+
+      dut.io.operandA.poke(100.U)
+      dut.io.operandB.poke(42.U)
+      dut.io.operation.poke(ALUOp.PASSB)
+      dut.io.aluResult.expect(42.U)  // Should pass operandB
+      dut.clock.step(1)
+
+      dut.io.operandA.poke(0.U)
+      dut.io.operandB.poke("hdeadbeef".U)
+      dut.io.operation.poke(ALUOp.PASSB)
+      dut.io.aluResult.expect("hdeadbeef".U)
+      dut.clock.step(1)
+
+    }
+  }
+}
