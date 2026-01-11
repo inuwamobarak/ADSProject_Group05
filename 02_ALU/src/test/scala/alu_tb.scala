@@ -64,6 +64,48 @@ class ALUAddTest extends AnyFlatSpec with ChiselScalatestTester {
   }
 }
 
-// ---------------------------------------------------
-// ToDo: Add test classes for all other ALU operations
-//---------------------------------------------------
+// Test SUB operation
+class ALUSubTest extends AnyFlatSpec with ChiselScalatestTester {
+  "ALU_Sub_Tester" should "test SUB operation" in {
+    test(new ALU).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+      dut.clock.setTimeout(0)
+
+      // Basic subtraction
+      dut.io.operandA.poke(20.U)
+      dut.io.operandB.poke(10.U)
+      dut.io.operation.poke(ALUOp.SUB)
+      dut.io.aluResult.expect(10.U)
+      dut.clock.step(1)
+
+      // Underflow test
+      dut.io.operandA.poke(0.U)
+      dut.io.operandB.poke(1.U)
+      dut.io.operation.poke(ALUOp.SUB)
+      dut.io.aluResult.expect("hffffffff".U)  // Two's complement wrap
+      dut.clock.step(1)
+
+      // Equal numbers
+      dut.io.operandA.poke(42.U)
+      dut.io.operandB.poke(42.U)
+      dut.io.operation.poke(ALUOp.SUB)
+      dut.io.aluResult.expect(0.U)
+      dut.clock.step(1)
+
+      // Large numbers
+      dut.io.operandA.poke("h9abcdef0".U)
+      dut.io.operandB.poke("h12345678".U)
+      dut.io.operation.poke(ALUOp.SUB)
+      dut.io.aluResult.expect("h88888878".U)
+      dut.clock.step(1)
+
+      // Negative result
+      dut.io.operandA.poke(5.U)
+      dut.io.operandB.poke(10.U)
+      dut.io.operation.poke(ALUOp.SUB)
+      dut.io.aluResult.expect("hfffffffb".U)  // -5 in two's complement
+      dut.clock.step(1)
+
+
+    }
+  }
+}
