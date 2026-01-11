@@ -55,5 +55,22 @@ class ALU extends Module {
     is(ALUOp.XOR) {
       io.aluResult := io.operandA ^ io.operandB
     }
+    is(ALUOp.SLL) {
+      val shiftAmount = io.operandB(4, 0)  // Only low 5 bits for RV32I
+      io.aluResult := io.operandA << shiftAmount
+    }
+    is(ALUOp.SRL) {
+      val shiftAmount = io.operandB(4, 0)
+      io.aluResult := io.operandA >> shiftAmount
+    }
+    is(ALUOp.SRA) {
+      val shiftAmount = io.operandB(4, 0)
+      // Arithmetic right shift (preserves sign bit)
+      io.aluResult := (io.operandA.asSInt >> shiftAmount).asUInt
+    }
+    is(ALUOp.SLT) {
+      // Signed comparison
+      io.aluResult := (io.operandA.asSInt < io.operandB.asSInt).asUInt
+    }
   }
 }
