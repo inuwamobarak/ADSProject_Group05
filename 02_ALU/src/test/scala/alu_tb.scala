@@ -145,3 +145,41 @@ class ALUAndTest extends AnyFlatSpec with ChiselScalatestTester {
     }
   }
 }
+
+// Test OR operation
+class ALUOrTest extends AnyFlatSpec with ChiselScalatestTester {
+  "ALU_Or_Tester" should "test OR operation" in {
+    test(new ALU).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+      dut.clock.setTimeout(0)
+
+      // Basic OR
+      dut.io.operandA.poke("haa".U)
+      dut.io.operandB.poke("h55".U)
+      dut.io.operation.poke(ALUOp.OR)
+      dut.io.aluResult.expect("hff".U)  // aa | 55 = ff
+      dut.clock.step(1)
+
+      // All ones with zeros
+      dut.io.operandA.poke("hffffffff".U)
+      dut.io.operandB.poke("h00000000".U)
+      dut.io.operation.poke(ALUOp.OR)
+      dut.io.aluResult.expect("hffffffff".U)
+      dut.clock.step(1)
+
+      // Test with specific bit patterns
+      dut.io.operandA.poke("h12345678".U)
+      dut.io.operandB.poke("h87654321".U)
+      dut.io.operation.poke(ALUOp.OR)
+      dut.io.aluResult.expect("h97755779".U)
+      dut.clock.step(1)
+
+      // OR with same value
+      dut.io.operandA.poke("hdeadbeef".U)
+      dut.io.operandB.poke("hdeadbeef".U)
+      dut.io.operation.poke(ALUOp.OR)
+      dut.io.aluResult.expect("hdeadbeef".U)
+      dut.clock.step(1)
+
+    }
+  }
+}
