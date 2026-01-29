@@ -34,5 +34,18 @@ import chisel3._
 // EX-Barrier
 // -----------------------------------------
 
-//ToDo: Add your implementation according to the specification above here 
+class EXBarrier extends Module {
+  val io = IO(new Bundle {
+    val inAluResult = Input(UInt(32.W))
+    val inRD = Input(UInt(5.W))
+    val inXcptInvalid = Input(Bool())
 
+    val outAluResult = Output(UInt(32.W))
+    val outRD = Output(UInt(5.W))
+    val outXcptInvalid = Output(Bool())
+  })
+
+  io.outAluResult := RegNext(io.inAluResult, 0.U)
+  io.outRD := RegNext(io.inRD, 0.U)
+  io.outXcptInvalid := RegNext(io.inXcptInvalid, false.B)
+}

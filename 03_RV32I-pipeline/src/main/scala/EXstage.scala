@@ -40,4 +40,46 @@ import uopc._
 // Execute Stage
 // -----------------------------------------
 
-//ToDo: Add your implementation according to the specification above here 
+class EX extends Module {
+  val io = IO(new Bundle {
+    val uop = Input(uopc())
+    val operandA = Input(UInt(32.W))
+    val operandB = Input(UInt(32.W))
+    val aluResult = Output(UInt(32.W))
+    val xcptInvalid = Input(Bool())
+    val outXcptInvalid = Output(Bool())
+  })
+
+  val alu = Module(new ALU)
+
+  alu.io.operandA := io.operandA
+  alu.io.operandB := io.operandB
+
+  alu.io.operation := MuxLookup(io.uop.asUInt, ALUOp.ADD, Seq(
+    // R-type
+    uopc.ADD.asUInt  -> ALUOp.ADD,
+    uopc.SUB.asUInt  -> ALUOp.SUB,
+    uopc.AND.asUInt  -> ALUOp.AND,
+    uopc.OR.asUInt   -> ALUOp.OR,
+    uopc.XOR.asUInt  -> ALUOp.XOR,
+    uopc.SLL.asUInt  -> ALUOp.SLL,
+    uopc.SRL.asUInt  -> ALUOp.SRL,
+    uopc.SRA.asUInt  -> ALUOp.SRA,
+    uopc.SLT.asUInt  -> ALUOp.SLT,
+    uopc.SLTU.asUInt -> ALUOp.SLTU,
+
+    // I-type
+    uopc.ADDI.asUInt  -> ALUOp.ADD,
+    uopc.ANDI.asUInt  -> ALUOp.AND,
+    uopc.ORI.asUInt   -> ALUOp.OR,
+    uopc.XORI.asUInt  -> ALUOp.XOR,
+    uopc.SLLI.asUInt  -> ALUOp.SLL,
+    uopc.SRLI.asUInt  -> ALUOp.SRL,
+    uopc.SRAI.asUInt  -> ALUOp.SRA,
+    uopc.SLTI.asUInt  -> ALUOp.SLT,
+    uopc.SLTIU.asUInt -> ALUOp.SLTU 
+  ))
+
+  io.aluResult := alu.io.aluResult
+  io.outXcptInvalid := io.xcptInvalid
+}
