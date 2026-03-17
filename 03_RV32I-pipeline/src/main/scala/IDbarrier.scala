@@ -47,11 +47,17 @@ class IDBarrier extends Module {
     val inOperandB = Input(UInt(32.W))
     val inXcptInvalid = Input(Bool())
 
+    val inRS1 = Input(UInt(5.W)) 
+    val inRS2 = Input(UInt(5.W))
+
     val outUOP = Output(uopc())
     val outRD  = Output(UInt(5.W))
     val outOperandA = Output(UInt(32.W))
     val outOperandB = Output(UInt(32.W))
     val outXcptInvalid = Output(Bool())
+
+    val outRS1 = Output(UInt(5.W)) 
+    val outRS2 = Output(UInt(5.W))
   })
 
   io.outUOP := RegNext(io.inUOP, uopc.NOP)
@@ -59,4 +65,6 @@ class IDBarrier extends Module {
   io.outOperandA := RegNext(io.inOperandA, 0.U)
   io.outOperandB := RegNext(io.inOperandB, 0.U)
   io.outXcptInvalid := RegNext(io.inXcptInvalid, false.B)
+  io.outRS1 := RegNext(io.inRS1, 0.U)
+  io.outRS2 := RegNext(io.inRS2, 0.U)
 }

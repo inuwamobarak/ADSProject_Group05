@@ -85,6 +85,8 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
 
   val regFile     = Module(new regFile)
 
+  val forwardingUnit = Module(new ForwardingUnit)
+
   // -----------------------------------------
   // IF → IF Barrier
   // -----------------------------------------
@@ -116,6 +118,8 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   idBarrier.io.inOperandA     := idStage.io.operandA
   idBarrier.io.inOperandB     := idStage.io.operandB
   idBarrier.io.inXcptInvalid  := idStage.io.xcptInvalid
+  idBarrier.io.inRS1 := idStage.io.rs1
+  idBarrier.io.inRS2 := idStage.io.rs2
 
   // -----------------------------------------
   // ID Barrier → EX
@@ -133,6 +137,32 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   exBarrier.io.inAluResult    := exStage.io.aluResult
   exBarrier.io.inRD           := idBarrier.io.outRD
   exBarrier.io.inXcptInvalid  := exStage.io.outXcptInvalid
+
+    // -----------------------------------------
+    // Forwarding Unit
+    // -----------------------------------------
+
+    // Connect ID Barrier to Forwarding Unit
+    forwardingUnit.io.rs := idBarrier.io.outRS1
+    forwardingUnit.io.rt := idBarrier.io.outRS2
+    forwardingUnit.io.uop := idBarrier.io.outUOP
+    forwardingUnit.io.rd_mem  := exBarrier.io.outRD
+    forwardingUnit.io.rd_wb   := wbStage.io.rd_out
+    forwardingUnit.io.c_reg_mem := exBarrier.io.outRD =/= 0.U
+    forwardingUnit.io.c_reg_wb  := wbStage.io.rd_out =/= 0.U
+
+    val operandA_final = MuxLookup(forwardingUnit.io.forwardA, idBarrier.io.outOperandA, Seq(
+    "b10".U -> exBarrier.io.outAluResult, // Forward from MEM stage
+    "b01".U -> wbStage.io.aluResult       // Forward from WB stage
+    ))
+
+    val operandB_final = MuxLookup(forwardingUnit.io.forwardB, idBarrier.io.outOperandB, Seq(
+    "b10".U -> exBarrier.io.outAluResult, // Forward from MEM stage
+    "b01".U -> wbStage.io.aluResult       // Forward from WB stage
+    ))
+    // Connect these final values to the EX stage
+    exStage.io.operandA := operandA_final
+    exStage.io.operandB := operandB_final
 
   // -----------------------------------------
   // EX Barrier → MEM

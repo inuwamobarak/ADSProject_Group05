@@ -54,6 +54,9 @@ class ID extends Module {
     val regRespA = Input(new regFileReadResp)
     val regRespB = Input(new regFileReadResp)
 
+    val rs1 = Output(UInt(5.W))
+    val rs2 = Output(UInt(5.W))
+    
     val uop = Output(uopc())
     val rd  = Output(UInt(5.W))
     val operandA = Output(UInt(32.W))
@@ -69,6 +72,9 @@ class ID extends Module {
   val funct7 = io.instr(31,25)
 
   val immI = io.instr(31,20).asSInt.asUInt
+
+  io.rs1 := rs1
+  io.rs2 := rs2
 
   io.regReqA.addr := rs1
   io.regReqB.addr := rs2
