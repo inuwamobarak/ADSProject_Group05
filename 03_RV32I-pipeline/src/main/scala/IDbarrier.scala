@@ -49,7 +49,19 @@ class IDBarrier extends Module {
 
     val inRS1 = Input(UInt(5.W)) 
     val inRS2 = Input(UInt(5.W))
+    
+    // Branch/jump info
+    val inBranchTarget = Input(UInt(32.W))
+    val inIsBranch     = Input(Bool())
+    val inIsJump       = Input(Bool())
+    val inIsJALR       = Input(Bool())
+    val inPC           = Input(UInt(32.W))   // PC of the instruction in ID
+    val inLinkAddr        = Input(UInt(32.W))   // PC+4 for JAL/JALR rd writeback
+    val inWasBTBPredTaken = Input(Bool())       // what BTB predicted at fetch time
 
+    // Flush: insert NOP bubble
+    val flush = Input(Bool())
+ 
     val outUOP = Output(uopc())
     val outRD  = Output(UInt(5.W))
     val outOperandA = Output(UInt(32.W))
@@ -58,13 +70,30 @@ class IDBarrier extends Module {
 
     val outRS1 = Output(UInt(5.W)) 
     val outRS2 = Output(UInt(5.W))
+
+    // Branch-related outputs
+    val outBranchTarget = Output(UInt(32.W))
+    val outIsBranch     = Output(Bool())
+    val outIsJump       = Output(Bool())
+    val outIsJALR       = Output(Bool())
+    val outPC           = Output(UInt(32.W))
+    val outLinkAddr        = Output(UInt(32.W))
+    val outWasBTBPredTaken = Output(Bool())
   })
 
-  io.outUOP := RegNext(io.inUOP, uopc.NOP)
-  io.outRD  := RegNext(io.inRD, 0.U)
-  io.outOperandA := RegNext(io.inOperandA, 0.U)
-  io.outOperandB := RegNext(io.inOperandB, 0.U)
-  io.outXcptInvalid := RegNext(io.inXcptInvalid, false.B)
+  // When flushing, register a NOP bubble
+  io.outUOP         := RegNext(Mux(io.flush, uopc.NOP,   io.inUOP),         uopc.NOP)
+  io.outRD          := RegNext(Mux(io.flush, 0.U,        io.inRD),          0.U)
+  io.outOperandA    := RegNext(Mux(io.flush, 0.U,        io.inOperandA),    0.U)
+  io.outOperandB    := RegNext(Mux(io.flush, 0.U,        io.inOperandB),    0.U)
+  io.outXcptInvalid := RegNext(Mux(io.flush, false.B,    io.inXcptInvalid), false.B)
   io.outRS1 := RegNext(io.inRS1, 0.U)
   io.outRS2 := RegNext(io.inRS2, 0.U)
+  io.outBranchTarget := RegNext(Mux(io.flush, 0.U,       io.inBranchTarget),0.U)
+  io.outIsBranch    := RegNext(Mux(io.flush, false.B,    io.inIsBranch),    false.B)
+  io.outIsJump      := RegNext(Mux(io.flush, false.B,    io.inIsJump),      false.B)
+  io.outIsJALR      := RegNext(Mux(io.flush, false.B,    io.inIsJALR),      false.B)
+  io.outPC          := RegNext(io.inPC,    0.U)
+  io.outLinkAddr    := RegNext(io.inLinkAddr, 0.U)
+  io.outWasBTBPredTaken := RegNext(Mux(io.flush, false.B, io.inWasBTBPredTaken), false.B)
 }

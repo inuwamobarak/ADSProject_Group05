@@ -42,13 +42,34 @@ import chisel3.util.experimental.loadMemoryFromFile
 class IF (BinaryFile: String) extends Module {
   val io = IO(new Bundle {
     val instr = Output(UInt(32.W))
+    val pc      = Output(UInt(32.W))
+ 
+    // Control hazard redirect (from EX or ID stage)
+    val pcRedirect    = Input(Bool())
+    val redirectTarget = Input(UInt(32.W))
+ 
+    // BTB prediction inputs (from BTB, consulted every cycle)
+    val btbValid       = Input(Bool())
+    val btbTarget      = Input(UInt(32.W))
+    val btbPredTaken   = Input(Bool())
+    val useBTB         = Input(Bool())   // enable/disable BTB (switch static vs dynamic)
   })
 
   val pc = RegInit(0.U(32.W))
 
   val imem = Mem(4096, UInt(32.W))
   loadMemoryFromFile(imem, BinaryFile)
-
   io.instr := imem(pc >> 2)
-  pc := pc + 4.U
+  io.pc    := pc
+ 
+  // PC update logic
+  when(io.pcRedirect) {
+    // Flush/redirect always wins (misprediction or unconditional jump resolved in ID/EX)
+    pc := io.redirectTarget
+  }.elsewhen(io.useBTB && io.btbValid && io.btbPredTaken) {
+    // BTB predicts taken: jump to predicted target
+    pc := io.btbTarget
+  }.otherwise {
+    pc := pc + 4.U
+  }
 }

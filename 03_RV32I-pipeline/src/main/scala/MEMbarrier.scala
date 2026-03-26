@@ -39,13 +39,16 @@ class MEMBarrier extends Module {
     val inAluResult = Input(UInt(32.W))
     val inRD = Input(UInt(5.W))
     val inException = Input(Bool())
+    val inRdWriteEn = Input(Bool())
 
     val outAluResult = Output(UInt(32.W))
     val outRD = Output(UInt(5.W))
     val outException = Output(Bool())
+    val outRdWriteEn = Output(Bool())
   })
 
   io.outAluResult := RegNext(io.inAluResult, 0.U)
   io.outRD := RegNext(io.inRD, 0.U)
   io.outException := RegNext(io.inException, false.B)
+  io.outRdWriteEn := RegNext(io.inRdWriteEn, false.B)
 }
