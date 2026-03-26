@@ -48,17 +48,31 @@ import uopc._
 class ID extends Module {
   val io = IO(new Bundle {
     val instr = Input(UInt(32.W))
+    val pc    = Input(UInt(32.W))   // PC of this instruction (for branch target calc)
 
     val regReqA = Output(new regFileReadReq)
     val regReqB = Output(new regFileReadReq)
     val regRespA = Input(new regFileReadResp)
     val regRespB = Input(new regFileReadResp)
 
+    val rs1 = Output(UInt(5.W))
+    val rs2 = Output(UInt(5.W))
+    
     val uop = Output(uopc())
     val rd  = Output(UInt(5.W))
     val operandA = Output(UInt(32.W))
     val operandB = Output(UInt(32.W))
     val xcptInvalid = Output(Bool())
+
+    // Branch/jump specific
+    val branchTarget = Output(UInt(32.W))  // PC-relative target (JAL, B-type)
+    val isBranch     = Output(Bool())      // conditional branch
+    val isJump       = Output(Bool())      // unconditional jump (JAL/JALR)
+    val isJALR       = Output(Bool())      // JALR needs rs1 from regfile
+ 
+    // PC redirect for JAL (can be resolved here)
+    val jalRedirect   = Output(Bool())
+    val jalTarget     = Output(UInt(32.W))
   })
 
   val opcode = io.instr(6,0)
@@ -69,6 +83,11 @@ class ID extends Module {
   val funct7 = io.instr(31,25)
 
   val immI = io.instr(31,20).asSInt.asUInt
+  val immB   = Cat(io.instr(31), io.instr(7), io.instr(30, 25), io.instr(11, 8), 0.U(1.W)).asSInt.pad(32).asUInt
+  val immJ   = Cat(io.instr(31), io.instr(19, 12), io.instr(20), io.instr(30, 21), 0.U(1.W)).asSInt.pad(32).asUInt
+ 
+  io.rs1 := rs1
+  io.rs2 := rs2
 
   io.regReqA.addr := rs1
   io.regReqB.addr := rs2
@@ -79,6 +98,13 @@ class ID extends Module {
   io.rd := rd
   io.uop := uopc.NOP
   io.xcptInvalid := false.B
+
+  io.branchTarget := io.pc + immB   // B-type default
+  io.isBranch     := false.B
+  io.isJump       := false.B
+  io.isJALR       := false.B
+  io.jalRedirect  := false.B
+  io.jalTarget    := io.pc + immJ
 
   switch(opcode) {
 
@@ -120,13 +146,65 @@ class ID extends Module {
         }
         }
     }
+    
+    // -------------------------
+    // B-type instructions
+    // -------------------------
+    is("b1100011".U) {
+      io.isBranch     := true.B
+      io.branchTarget := io.pc + immB
+      switch(funct3) {
+        is("b000".U) { io.uop := uopc.BEQ }
+        is("b001".U) { io.uop := uopc.BNE }
+        is("b100".U) { io.uop := uopc.BLT }
+        is("b101".U) { io.uop := uopc.BGE }
+        is("b110".U) { io.uop := uopc.BLTU }
+        is("b111".U) { io.uop := uopc.BGEU }
+      }
+      // Static not-taken: no redirect from ID
+      // operandA and operandB are rs1 and rs2 (for comparison in EX)
+    }
+    
+    // -------------------------
+    // JAL
+    // -------------------------
+    is("b1101111".U) {
+      io.uop       := uopc.JAL
+      io.isJump    := true.B
+      // rd gets PC+4 (link address) — pass as operandB; operandA = PC
+      io.operandA  := io.pc
+      io.operandB  := 4.U
+      // JAL target is PC-relative, known here
+      io.jalRedirect := true.B
+      io.jalTarget   := io.pc + immJ
+    }
+ 
+    // -------------------------
+    // JALR
+    // -------------------------
+    is("b1100111".U) {
+      io.uop    := uopc.JALR
+      io.isJump := true.B
+      io.isJALR := true.B
+      // rd gets PC+4; rs1 + imm is the target (computed in EX)
+      // operandA = rs1 (for target addr), operandB = imm
+      // We'll also pass PC+4 as the link value via a separate path
+      // For simplicity: ALU computes rs1+imm (target), link stored via extra signal
+      io.operandA := io.regRespA.data
+      io.operandB := immI
+      // JALR redirect resolved in EX stage
+    }
   }
+
     // -------------------------
     // Invalid instruction
     // -------------------------
     when(
      opcode =/= "b0110011".U &&
-     opcode =/= "b0010011".U
+     opcode =/= "b0010011".U &&
+     opcode =/= "b1100011".U &&
+     opcode =/= "b1101111".U &&
+     opcode =/= "b1100111".U
      ) {
      io.xcptInvalid := true.B
     }

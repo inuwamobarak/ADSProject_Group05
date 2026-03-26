@@ -48,6 +48,30 @@ class EX extends Module {
     val aluResult = Output(UInt(32.W))
     val xcptInvalid = Input(Bool())
     val outXcptInvalid = Output(Bool())
+
+    // Branch/jump inputs
+    val branchTarget = Input(UInt(32.W))   // PC+imm (from ID, for B-type / JAL)
+    val isBranch     = Input(Bool())
+    val isJump       = Input(Bool())
+    val isJALR       = Input(Bool())
+    val pc           = Input(UInt(32.W))   // PC of this instruction
+    val linkAddr     = Input(UInt(32.W))   // PC+4 for JAL/JALR
+ 
+    // Branch/jump resolution outputs
+    val branchTaken   = Output(Bool())     // was branch actually taken?
+    val jumpTarget    = Output(UInt(32.W)) // resolved target (for taken branch/jump)
+    val doRedirect    = Output(Bool())     // tell IF to redirect
+    val flushIFID     = Output(Bool())     // flush IF+ID barriers (mispredicted branch)
+    val rdWriteEn     = Output(Bool())     // should rd be written? (false for branches)
+    val rdLinkData    = Output(UInt(32.W)) // PC+4 for JAL/JALR to write to rd
+ 
+    // For BTB update
+    val btbUpdate        = Output(Bool())
+    val btbUpdatePC      = Output(UInt(32.W))
+    val btbUpdateTarget  = Output(UInt(32.W))
+    val btbMispredicted  = Output(Bool())
+    val wasBTBPredTaken  = Input(Bool())   // what the BTB predicted (from ID barrier)
+
   })
 
   val alu = Module(new ALU)
@@ -77,9 +101,78 @@ class EX extends Module {
     uopc.SRLI.asUInt  -> ALUOp.SRL,
     uopc.SRAI.asUInt  -> ALUOp.SRA,
     uopc.SLTI.asUInt  -> ALUOp.SLT,
-    uopc.SLTIU.asUInt -> ALUOp.SLTU 
+    uopc.SLTIU.asUInt -> ALUOp.SLTU,
+
+    // JAL/JALR: ALU computes link (PC+4) or jump target
+    // For JAL: operandA=PC, operandB=4 → result = PC+4 (link) — but we already have linkAddr
+    // For JALR: operandA=rs1, operandB=imm → result = rs1+imm (target)
+    uopc.JAL.asUInt   -> ALUOp.ADD,
+    uopc.JALR.asUInt  -> ALUOp.ADD,
+    // Branches: we don't use ALU result for writeback; comparison done below
+    uopc.BEQ.asUInt   -> ALUOp.SUB,
+    uopc.BNE.asUInt   -> ALUOp.SUB,
+    uopc.BLT.asUInt   -> ALUOp.SLT,
+    uopc.BGE.asUInt   -> ALUOp.SLT,
+    uopc.BLTU.asUInt  -> ALUOp.SLTU,
+    uopc.BGEU.asUInt  -> ALUOp.SLTU 
   ))
 
-  io.aluResult := alu.io.aluResult
+  // -------------------------
+  // Branch condition evaluation
+  // -------------------------
+  val actuallyTaken = WireDefault(false.B)
+  switch(io.uop) {
+    is(uopc.BEQ)  { actuallyTaken := (io.operandA === io.operandB) }
+    is(uopc.BNE)  { actuallyTaken := (io.operandA =/= io.operandB) }
+    is(uopc.BLT)  { actuallyTaken := (io.operandA.asSInt < io.operandB.asSInt) }
+    is(uopc.BGE)  { actuallyTaken := (io.operandA.asSInt >= io.operandB.asSInt) }
+    is(uopc.BLTU) { actuallyTaken := (io.operandA < io.operandB) }
+    is(uopc.BGEU) { actuallyTaken := (io.operandA >= io.operandB) }
+  }
+ 
+  // JALR target: rs1 + imm (with bit[0] cleared per spec)
+  val jalrTarget = Cat(alu.io.aluResult(31, 1), 0.U(1.W))
+ 
+  // -------------------------
+  // Redirect / flush logic
+  // -------------------------
+  // Static prediction: branches assumed not-taken, jumps always taken
+  // Branch misprediction = branch was actually taken (static) or BTB was wrong (dynamic)
+  val branchMispredicted = io.isBranch && actuallyTaken && !io.wasBTBPredTaken ||
+                           io.isBranch && !actuallyTaken && io.wasBTBPredTaken
+ 
+  io.branchTaken  := actuallyTaken
+  io.doRedirect   := (io.isBranch && actuallyTaken) || (io.isJump && io.isJALR)
+  io.flushIFID    := branchMispredicted || (io.isJump && io.isJALR)
+  io.jumpTarget   := Mux(io.isJALR, jalrTarget, io.branchTarget)
+ 
+  // -------------------------
+  // ALU result / writeback
+  // -------------------------
+  // For JAL/JALR: write link address (PC+4) to rd
+  // For branches: no rd writeback
+  // For others: write ALU result
+  val isJALorJALR = io.uop === uopc.JAL || io.uop === uopc.JALR
+  io.rdWriteEn  := !io.isBranch
+  io.rdLinkData := io.linkAddr   // PC+4
+ 
+  // What gets passed to MEM/WB as aluResult:
+  // - JAL/JALR: link address (PC+4)
+  // - Branch: 0 (not written back)
+  // - Others: ALU result
+  io.aluResult := MuxCase(alu.io.aluResult, Seq(
+    isJALorJALR  -> io.linkAddr,
+    io.isBranch  -> 0.U
+  ))
+ 
   io.outXcptInvalid := io.xcptInvalid
+ 
+  // -------------------------
+  // BTB update signals
+  // -------------------------
+  // Send update when a branch is resolved
+  io.btbUpdate       := io.isBranch
+  io.btbUpdatePC     := io.pc
+  io.btbUpdateTarget := io.branchTarget
+  io.btbMispredicted := branchMispredicted
 }

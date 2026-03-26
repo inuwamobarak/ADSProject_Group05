@@ -26,6 +26,31 @@ Functionality:
     Save all input signals to a register and output them in the following clock cycle
 */
 
+// package core_tile
+
+// import chisel3._
+
+// // -----------------------------------------
+// // EX-Barrier
+// // -----------------------------------------
+
+// class EXBarrier extends Module {
+//   val io = IO(new Bundle {
+//     val inAluResult = Input(UInt(32.W))
+//     val inRD = Input(UInt(5.W))
+//     val inXcptInvalid = Input(Bool())
+
+//     val outAluResult = Output(UInt(32.W))
+//     val outRD = Output(UInt(5.W))
+//     val outXcptInvalid = Output(Bool())
+//   })
+
+//   io.outAluResult := RegNext(io.inAluResult, 0.U)
+//   io.outRD := RegNext(io.inRD, 0.U)
+//   io.outXcptInvalid := RegNext(io.inXcptInvalid, false.B)
+// }
+
+
 package core_tile
 
 import chisel3._
@@ -36,16 +61,19 @@ import chisel3._
 
 class EXBarrier extends Module {
   val io = IO(new Bundle {
-    val inAluResult = Input(UInt(32.W))
-    val inRD = Input(UInt(5.W))
+    val inAluResult   = Input(UInt(32.W))
+    val inRD          = Input(UInt(5.W))
     val inXcptInvalid = Input(Bool())
+    val inRdWriteEn   = Input(Bool())   // whether rd should be written
 
-    val outAluResult = Output(UInt(32.W))
-    val outRD = Output(UInt(5.W))
+    val outAluResult   = Output(UInt(32.W))
+    val outRD          = Output(UInt(5.W))
     val outXcptInvalid = Output(Bool())
+    val outRdWriteEn   = Output(Bool())
   })
 
-  io.outAluResult := RegNext(io.inAluResult, 0.U)
-  io.outRD := RegNext(io.inRD, 0.U)
+  io.outAluResult   := RegNext(io.inAluResult,   0.U)
+  io.outRD          := RegNext(io.inRD,          0.U)
   io.outXcptInvalid := RegNext(io.inXcptInvalid, false.B)
+  io.outRdWriteEn   := RegNext(io.inRdWriteEn,   false.B)
 }

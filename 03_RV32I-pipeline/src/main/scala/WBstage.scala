@@ -44,6 +44,8 @@ class WB extends Module {
   val io = IO(new Bundle {
     val aluResult = Input(UInt(32.W))
     val rd = Input(UInt(5.W))
+    val rdWriteEn = Input(Bool())        // gated by branch/NOP
+    val rd_out = Output(UInt(5.W))
 
     val regFileReq = Output(new regFileWriteReq)
     val check_res = Output(UInt(32.W))
@@ -54,4 +56,5 @@ class WB extends Module {
   io.regFileReq.wr_en := true.B
 
   io.check_res := io.aluResult
+  io.rd_out := io.rd
 }

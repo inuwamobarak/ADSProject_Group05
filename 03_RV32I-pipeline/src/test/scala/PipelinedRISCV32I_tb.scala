@@ -105,8 +105,42 @@ class PipelinedRISCV32ITest extends AnyFlatSpec with ChiselScalatestTester {
       dut.io.result.expect(1.U)     // SLTU x13, x5, x4
       dut.io.exception.expect(false.B)
       dut.clock.step(1)
-      
-                 
+      dut.io.result.expect(4095.U)   // ADDI x14, x0, -1 // fff00713
+      dut.io.exception.expect(false.B)
+
+      ////////// Task 4.1 Forwarding Unit
+
+      //////////// Resolving the Hazard with NOP ins//////////////////
+      //dut.clock.step(1)
+      //dut.io.result.expect(0.U)     // first NOP //00000013
+      //dut.clock.step(1)
+      //dut.io.result.expect(0.U)     // second NOP //00000013
+      //dut.clock.step(1)
+      //dut.io.result.expect(0.U)     // third NOP  //00000013
+      //dut.clock.step(1)
+      //dut.io.result.expect(10.U)   // add x2 = x1 + x1 = 5+5=10  //00108133
+      ////////////////////////////////////
+
+      // Case 1: EX-to-EX Forwarding
+      dut.clock.step(1)
+      dut.io.result.expect(5.U)    // addi x1, x0, 5 //      00500093
+      dut.clock.step(1)
+      dut.io.result.expect(10.U)   // add x2 = x1 + x1 = 5+5=10  //00108133
+
+      // Case 2: Instruction uses x2 with one instruction in between
+      dut.clock.step(1)
+      dut.io.result.expect(20.U)   // addi x3, x0, 20
+      dut.clock.step(1)
+      dut.io.result.expect(30.U)   // add x4, x2, x3 -> 10 + 20 = 30 (x2 forwarded from MEM/WB)
+
+      // Css3 3 : If two instructions write to the same register, the most recent one must be forwarded
+      dut.clock.step(1)
+      dut.io.result.expect(100.U)  // addi x5, x0, 100
+      dut.clock.step(1)
+      dut.io.result.expect(200.U)  // addi x5, x0, 200
+      dut.clock.step(1)
+      dut.io.result.expect(400.U)  // add x6, x5, x5 -> Should be 200+200, NOT 100+100
+
     }
   }
 }

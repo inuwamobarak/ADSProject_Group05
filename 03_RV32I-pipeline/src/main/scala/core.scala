@@ -61,6 +61,7 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
     //I/O ports
     val check_res = Output(UInt(32.W))
     val exception = Output(Bool())
+    val useBTB    = Input(Bool())   // runtime switch: false = static, true = BTB-based
   })
 
 
@@ -85,17 +86,70 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
 
   val regFile     = Module(new regFile)
 
+  val forwardingUnit = Module(new ForwardingUnit)
+
+  //
+  val btb = Module(new BTB)
+
+  // -----------------------------------------
+  // BTB connections (lookup from IF)
+  // -----------------------------------------
+ 
+  btb.io.PC := ifStage.io.pc
+  btb.io.isBranch := false.B  // driven by testbench directly; core doesn't need it
+
+  ifStage.io.btbValid     := btb.io.valid
+  ifStage.io.btbTarget    := btb.io.target
+  ifStage.io.btbPredTaken := btb.io.predictTaken
+  ifStage.io.useBTB       := io.useBTB
+ 
+  // BTB update from EX stage
+  btb.io.update        := exStage.io.btbUpdate
+  btb.io.updatePC      := exStage.io.btbUpdatePC
+  btb.io.updateTarget  := exStage.io.btbUpdateTarget
+  btb.io.mispredicted  := exStage.io.btbMispredicted
+ 
+  // -----------------------------------------
+  // Control hazard signals
+  // -----------------------------------------
+ 
+  // JAL is resolved in ID stage: redirect IF immediately
+  val jalRedirect   = idStage.io.jalRedirect
+  val jalTarget     = idStage.io.jalTarget
+ 
+  // JALR and taken branches resolved in EX stage
+  val exRedirect    = exStage.io.doRedirect
+  val exTarget      = exStage.io.jumpTarget
+  val exFlushIFID   = exStage.io.flushIFID
+ 
+  // Combined redirect: EX has priority over JAL (shouldn't overlap, but be safe)
+  val pcRedirect    = exRedirect || jalRedirect
+  val redirectTarget = Mux(exRedirect, exTarget, jalTarget)
+ 
+  ifStage.io.pcRedirect     := pcRedirect
+  ifStage.io.redirectTarget := redirectTarget
+ 
+  // IFBarrier flush: flush when JAL redirects (the instruction after JAL is wrong)
+  // or when EX flushes (2 wrong instructions in IF/ID)
+  ifBarrier.io.flush := jalRedirect || exFlushIFID
+ 
+  // IDBarrier flush: when EX detects misprediction/JALR (2 bubbles needed)
+  idBarrier.io.flush := exFlushIFID
+
   // -----------------------------------------
   // IF → IF Barrier
   // -----------------------------------------
 
   ifBarrier.io.inInstr := ifStage.io.instr
+  ifBarrier.io.inPC          := ifStage.io.pc
+  ifBarrier.io.inBTBPredTaken := io.useBTB && btb.io.valid && btb.io.predictTaken
 
   // -----------------------------------------
   // IF Barrier → ID
   // -----------------------------------------
 
   idStage.io.instr := ifBarrier.io.outInstr
+  idStage.io.pc    := ifBarrier.io.outPC
 
   // -----------------------------------------
   // Register File connections (ID ↔ RF)
@@ -116,6 +170,27 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   idBarrier.io.inOperandA     := idStage.io.operandA
   idBarrier.io.inOperandB     := idStage.io.operandB
   idBarrier.io.inXcptInvalid  := idStage.io.xcptInvalid
+  idBarrier.io.inRS1 := idStage.io.rs1
+  idBarrier.io.inRS2 := idStage.io.rs2
+  idBarrier.io.inBranchTarget := idStage.io.branchTarget
+  idBarrier.io.inIsBranch     := idStage.io.isBranch
+  idBarrier.io.inIsJump       := idStage.io.isJump
+  idBarrier.io.inIsJALR       := idStage.io.isJALR
+  idBarrier.io.inPC           := ifBarrier.io.outPC
+  idBarrier.io.inLinkAddr     := ifBarrier.io.outPC + 4.U  // PC+4 as link address
+  // Pass through what the BTB predicted at fetch time (travels with instruction through IFBarrier)
+  idBarrier.io.inWasBTBPredTaken := ifBarrier.io.outBTBPredTaken
+
+//   // -----------------------------------------
+//   // BTB Connection (Fetch Stage)
+//   // -----------------------------------------
+  
+//   btb.io.PC := pcReg
+//   btb.io.update := false.B  // Will be set in EX stage
+//   btb.io.updatePC := 0.U
+//   btb.io.updateTarget := 0.U
+//   btb.io.mispredicted := false.B
+//   btb.io.isBranch := idBarrier.io.outIsBranch
 
   // -----------------------------------------
   // ID Barrier → EX
@@ -125,6 +200,13 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   exStage.io.operandA  := idBarrier.io.outOperandA
   exStage.io.operandB  := idBarrier.io.outOperandB
   exStage.io.xcptInvalid := idBarrier.io.outXcptInvalid
+  exStage.io.branchTarget  := idBarrier.io.outBranchTarget
+  exStage.io.isBranch      := idBarrier.io.outIsBranch
+  exStage.io.isJump        := idBarrier.io.outIsJump
+  exStage.io.isJALR        := idBarrier.io.outIsJALR
+  exStage.io.pc            := idBarrier.io.outPC
+  exStage.io.linkAddr      := idBarrier.io.outLinkAddr
+  exStage.io.wasBTBPredTaken := idBarrier.io.outWasBTBPredTaken
 
   // -----------------------------------------
   // EX → EX Barrier
@@ -133,6 +215,33 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   exBarrier.io.inAluResult    := exStage.io.aluResult
   exBarrier.io.inRD           := idBarrier.io.outRD
   exBarrier.io.inXcptInvalid  := exStage.io.outXcptInvalid
+  exBarrier.io.inRdWriteEn   := exStage.io.rdWriteEn
+
+    // -----------------------------------------
+    // Forwarding Unit
+    // -----------------------------------------
+
+    // Connect ID Barrier to Forwarding Unit
+    forwardingUnit.io.rs := idBarrier.io.outRS1
+    forwardingUnit.io.rt := idBarrier.io.outRS2
+    forwardingUnit.io.uop := idBarrier.io.outUOP
+    forwardingUnit.io.rd_mem  := exBarrier.io.outRD
+    forwardingUnit.io.rd_wb   := wbStage.io.rd_out
+    forwardingUnit.io.c_reg_mem := exBarrier.io.outRD =/= 0.U
+    forwardingUnit.io.c_reg_wb  := wbStage.io.rd_out =/= 0.U
+
+    val operandA_final = MuxLookup(forwardingUnit.io.forwardA, idBarrier.io.outOperandA, Seq(
+    "b10".U -> exBarrier.io.outAluResult, // Forward from MEM stage
+    "b01".U -> wbStage.io.aluResult       // Forward from WB stage
+    ))
+
+    val operandB_final = MuxLookup(forwardingUnit.io.forwardB, idBarrier.io.outOperandB, Seq(
+    "b10".U -> exBarrier.io.outAluResult, // Forward from MEM stage
+    "b01".U -> wbStage.io.aluResult       // Forward from WB stage
+    ))
+    // Connect these final values to the EX stage
+    exStage.io.operandA := operandA_final
+    exStage.io.operandB := operandB_final
 
   // -----------------------------------------
   // EX Barrier → MEM
@@ -142,6 +251,7 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   memBarrier.io.inAluResult := exBarrier.io.outAluResult
   memBarrier.io.inRD        := exBarrier.io.outRD
   memBarrier.io.inException := exBarrier.io.outXcptInvalid
+  memBarrier.io.inRdWriteEn := exBarrier.io.outRdWriteEn
 
   // -----------------------------------------
   // MEM Barrier → WB
@@ -149,6 +259,7 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
 
   wbStage.io.aluResult := memBarrier.io.outAluResult
   wbStage.io.rd        := memBarrier.io.outRD
+  wbStage.io.rdWriteEn := memBarrier.io.outRdWriteEn
 
   // -----------------------------------------
   // WB → Register File
@@ -169,4 +280,5 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
 
   io.check_res := wbBarrier.io.outCheckRes
   io.exception := wbBarrier.io.outXcptInvalid
+
 }
