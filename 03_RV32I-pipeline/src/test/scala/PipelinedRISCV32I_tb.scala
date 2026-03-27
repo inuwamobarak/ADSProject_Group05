@@ -17,7 +17,10 @@ class PipelinedRISCV32ITest extends AnyFlatSpec with ChiselScalatestTester {
     test(new PipelinedRV32I("src/test/programs/BinaryFile_pipelined")).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
 
       dut.clock.setTimeout(0)
+<<<<<<< HEAD
       
+=======
+>>>>>>> 7623d9f2f9d264d8f88534fd1e13beffb4fcfbbc
       dut.clock.step(5)
       dut.io.result.expect(0.U)     // ADDI x0, x0, 0
       dut.io.exception.expect(false.B)
@@ -142,6 +145,7 @@ class PipelinedRISCV32ITest extends AnyFlatSpec with ChiselScalatestTester {
       dut.clock.step(1)
       dut.io.result.expect(400.U)  // add x6, x5, x5 -> Should be 200+200, NOT 100+100
 
+<<<<<<< HEAD
 
       // ===== Task 4.1 Forwarding tests =====
 
@@ -211,6 +215,8 @@ dut.io.result.expect(22.U)
 dut.clock.step(2)
 dut.io.result.expect(7.U)
 
+=======
+>>>>>>> 7623d9f2f9d264d8f88534fd1e13beffb4fcfbbc
     }
   }
 }
