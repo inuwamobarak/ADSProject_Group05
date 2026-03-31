@@ -35,20 +35,26 @@ package core_tile
 import chisel3._
 import chisel3.util.experimental.loadMemoryFromFile
 
-// -----------------------------------------
-// Fetch Stage
-// -----------------------------------------
-
 class IF (BinaryFile: String) extends Module {
   val io = IO(new Bundle {
     val instr = Output(UInt(32.W))
+    val pc    = Output(UInt(32.W))
+
+    val pcSrc    = Input(Bool())      // 1 => use redirectPC
+    val redirectPC = Input(UInt(32.W))
   })
 
-  val pc = RegInit(0.U(32.W))
+  val pcReg = RegInit(0.U(32.W))
 
   val imem = Mem(4096, UInt(32.W))
   loadMemoryFromFile(imem, BinaryFile)
 
-  io.instr := imem(pc >> 2)
-  pc := pc + 4.U
+  io.pc := pcReg
+  io.instr := imem(pcReg >> 2)
+
+  when(io.pcSrc) {
+    pcReg := io.redirectPC
+  }.otherwise {
+    pcReg := pcReg + 4.U
+  }
 }

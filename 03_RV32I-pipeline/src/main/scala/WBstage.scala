@@ -42,7 +42,7 @@ import chisel3._
 
 class WB extends Module {
   val io = IO(new Bundle {
-    val aluResult = Input(UInt(32.W))
+    val writeBackData = Input(UInt(32.W))
     val rd = Input(UInt(5.W))
     val rd_out = Output(UInt(5.W))
 
@@ -51,9 +51,9 @@ class WB extends Module {
   })
 
   io.regFileReq.addr := io.rd
-  io.regFileReq.data := io.aluResult
+  io.regFileReq.data := io.writeBackData
   io.regFileReq.wr_en := true.B
 
-  io.check_res := io.aluResult
+  io.check_res := io.writeBackData
   io.rd_out := io.rd
 }

@@ -47,8 +47,12 @@ class IDBarrier extends Module {
     val inOperandB = Input(UInt(32.W))
     val inXcptInvalid = Input(Bool())
 
-    val inRS1 = Input(UInt(5.W)) 
+    val inRS1 = Input(UInt(5.W))
     val inRS2 = Input(UInt(5.W))
+    val inPC  = Input(UInt(32.W))
+    val inImm = Input(UInt(32.W))
+
+    val flush = Input(Bool())
 
     val outUOP = Output(uopc())
     val outRD  = Output(UInt(5.W))
@@ -56,15 +60,20 @@ class IDBarrier extends Module {
     val outOperandB = Output(UInt(32.W))
     val outXcptInvalid = Output(Bool())
 
-    val outRS1 = Output(UInt(5.W)) 
+    val outRS1 = Output(UInt(5.W))
     val outRS2 = Output(UInt(5.W))
+    val outPC  = Output(UInt(32.W))
+    val outImm = Output(UInt(32.W))
   })
 
-  io.outUOP := RegNext(io.inUOP, uopc.NOP)
-  io.outRD  := RegNext(io.inRD, 0.U)
-  io.outOperandA := RegNext(io.inOperandA, 0.U)
-  io.outOperandB := RegNext(io.inOperandB, 0.U)
-  io.outXcptInvalid := RegNext(io.inXcptInvalid, false.B)
-  io.outRS1 := RegNext(io.inRS1, 0.U)
-  io.outRS2 := RegNext(io.inRS2, 0.U)
+  io.outUOP := RegNext(Mux(io.flush, uopc.NOP, io.inUOP), uopc.NOP)
+  io.outRD  := RegNext(Mux(io.flush, 0.U, io.inRD), 0.U)
+  io.outOperandA := RegNext(Mux(io.flush, 0.U, io.inOperandA), 0.U)
+  io.outOperandB := RegNext(Mux(io.flush, 0.U, io.inOperandB), 0.U)
+  io.outXcptInvalid := RegNext(Mux(io.flush, false.B, io.inXcptInvalid), false.B)
+
+  io.outRS1 := RegNext(Mux(io.flush, 0.U, io.inRS1), 0.U)
+  io.outRS2 := RegNext(Mux(io.flush, 0.U, io.inRS2), 0.U)
+  io.outPC  := RegNext(Mux(io.flush, 0.U, io.inPC), 0.U)
+  io.outImm := RegNext(Mux(io.flush, 0.U, io.inImm), 0.U)
 }

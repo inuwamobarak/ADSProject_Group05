@@ -51,18 +51,14 @@ package core_tile
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.loadMemoryFromFile
 import Assignment02.{ALU, ALUOp}
 import uopc._
 
-
 class PipelinedRV32Icore (BinaryFile: String) extends Module {
   val io = IO(new Bundle {
-    //I/O ports
     val check_res = Output(UInt(32.W))
     val exception = Output(Bool())
   })
-
 
   // -----------------------------------------
   // Instantiate modules
@@ -92,12 +88,15 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   // -----------------------------------------
 
   ifBarrier.io.inInstr := ifStage.io.instr
+  ifBarrier.io.inPC    := ifStage.io.pc
+  ifBarrier.io.flush   := exStage.io.branchTaken
 
   // -----------------------------------------
   // IF Barrier → ID
   // -----------------------------------------
 
   idStage.io.instr := ifBarrier.io.outInstr
+  idStage.io.pc    := ifBarrier.io.outPC
 
   // -----------------------------------------
   // Register File connections (ID ↔ RF)
@@ -113,72 +112,81 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   // ID → ID Barrier
   // -----------------------------------------
 
-  idBarrier.io.inUOP          := idStage.io.uop
-  idBarrier.io.inRD           := idStage.io.rd
-  idBarrier.io.inOperandA     := idStage.io.operandA
-  idBarrier.io.inOperandB     := idStage.io.operandB
-  idBarrier.io.inXcptInvalid  := idStage.io.xcptInvalid
-  idBarrier.io.inRS1 := idStage.io.rs1
-  idBarrier.io.inRS2 := idStage.io.rs2
+  idBarrier.io.inUOP         := idStage.io.uop
+  idBarrier.io.inRD          := idStage.io.rd
+  idBarrier.io.inOperandA    := idStage.io.operandA
+  idBarrier.io.inOperandB    := idStage.io.operandB
+  idBarrier.io.inXcptInvalid := idStage.io.xcptInvalid
+  idBarrier.io.inRS1         := idStage.io.rs1
+  idBarrier.io.inRS2         := idStage.io.rs2
+  idBarrier.io.inPC          := ifBarrier.io.outPC
+  idBarrier.io.inImm         := idStage.io.imm
+  idBarrier.io.flush         := exStage.io.branchTaken
+
+  // -----------------------------------------
+  // Forwarding Unit
+  // -----------------------------------------
+
+  forwardingUnit.io.rs        := idBarrier.io.outRS1
+  forwardingUnit.io.rt        := idBarrier.io.outRS2
+  forwardingUnit.io.uop       := idBarrier.io.outUOP
+  forwardingUnit.io.rd_mem    := exBarrier.io.outRD
+  forwardingUnit.io.rd_wb     := wbStage.io.rd_out
+  forwardingUnit.io.c_reg_mem := exBarrier.io.outRD =/= 0.U
+  forwardingUnit.io.c_reg_wb  := wbStage.io.rd_out =/= 0.U
+
+  val operandA_final = MuxLookup(forwardingUnit.io.forwardA, idBarrier.io.outOperandA, Seq(
+    "b10".U -> exBarrier.io.outAluResult,
+    "b01".U -> wbStage.io.writeBackData
+  ))
+
+  val operandB_final = MuxLookup(forwardingUnit.io.forwardB, idBarrier.io.outOperandB, Seq(
+    "b10".U -> exBarrier.io.outAluResult,
+    "b01".U -> wbStage.io.writeBackData
+  ))
 
   // -----------------------------------------
   // ID Barrier → EX
   // -----------------------------------------
 
-  exStage.io.uop        := idBarrier.io.outUOP
-  exStage.io.operandA  := idBarrier.io.outOperandA
-  exStage.io.operandB  := idBarrier.io.outOperandB
+  exStage.io.uop         := idBarrier.io.outUOP
+  exStage.io.operandA    := operandA_final
+  exStage.io.operandB    := operandB_final
+  exStage.io.pc          := idBarrier.io.outPC
+  exStage.io.imm         := idBarrier.io.outImm
   exStage.io.xcptInvalid := idBarrier.io.outXcptInvalid
+
+  // -----------------------------------------
+  // PC redirection for branch/jump
+  // -----------------------------------------
+
+  ifStage.io.pcSrc      := exStage.io.branchTaken
+  ifStage.io.redirectPC := exStage.io.branchTarget
 
   // -----------------------------------------
   // EX → EX Barrier
   // -----------------------------------------
 
-  exBarrier.io.inAluResult    := exStage.io.aluResult
-  exBarrier.io.inRD           := idBarrier.io.outRD
-  exBarrier.io.inXcptInvalid  := exStage.io.outXcptInvalid
-
-    // -----------------------------------------
-    // Forwarding Unit
-    // -----------------------------------------
-
-    // Connect ID Barrier to Forwarding Unit
-    forwardingUnit.io.rs := idBarrier.io.outRS1
-    forwardingUnit.io.rt := idBarrier.io.outRS2
-    forwardingUnit.io.uop := idBarrier.io.outUOP
-    forwardingUnit.io.rd_mem  := exBarrier.io.outRD
-    forwardingUnit.io.rd_wb   := wbStage.io.rd_out
-    forwardingUnit.io.c_reg_mem := exBarrier.io.outRD =/= 0.U
-    forwardingUnit.io.c_reg_wb  := wbStage.io.rd_out =/= 0.U
-
-    val operandA_final = MuxLookup(forwardingUnit.io.forwardA, idBarrier.io.outOperandA, Seq(
-    "b10".U -> exBarrier.io.outAluResult, // Forward from MEM stage
-    "b01".U -> wbStage.io.aluResult       // Forward from WB stage
-    ))
-
-    val operandB_final = MuxLookup(forwardingUnit.io.forwardB, idBarrier.io.outOperandB, Seq(
-    "b10".U -> exBarrier.io.outAluResult, // Forward from MEM stage
-    "b01".U -> wbStage.io.aluResult       // Forward from WB stage
-    ))
-    // Connect these final values to the EX stage
-    exStage.io.operandA := operandA_final
-    exStage.io.operandB := operandB_final
+  exBarrier.io.inAluResult     := exStage.io.aluResult
+  exBarrier.io.inWriteBackData := exStage.io.writeBackData
+  exBarrier.io.inRD            := idBarrier.io.outRD
+  exBarrier.io.inXcptInvalid   := exStage.io.outXcptInvalid
 
   // -----------------------------------------
   // EX Barrier → MEM
   // -----------------------------------------
-  // MEM stage has no logic in this assignment
 
-  memBarrier.io.inAluResult := exBarrier.io.outAluResult
-  memBarrier.io.inRD        := exBarrier.io.outRD
-  memBarrier.io.inException := exBarrier.io.outXcptInvalid
+  memBarrier.io.inAluResult     := exBarrier.io.outAluResult
+  memBarrier.io.inWriteBackData := exBarrier.io.outWriteBackData
+  memBarrier.io.inRD            := exBarrier.io.outRD
+  memBarrier.io.inException     := exBarrier.io.outXcptInvalid
 
   // -----------------------------------------
   // MEM Barrier → WB
   // -----------------------------------------
 
-  wbStage.io.aluResult := memBarrier.io.outAluResult
-  wbStage.io.rd        := memBarrier.io.outRD
+  wbStage.io.writeBackData := memBarrier.io.outWriteBackData
+  wbStage.io.rd            := memBarrier.io.outRD
 
   // -----------------------------------------
   // WB → Register File
@@ -190,7 +198,7 @@ class PipelinedRV32Icore (BinaryFile: String) extends Module {
   // WB → WB Barrier
   // -----------------------------------------
 
-  wbBarrier.io.inCheckRes     := wbStage.io.check_res
+  wbBarrier.io.inCheckRes    := wbStage.io.check_res
   wbBarrier.io.inXcptInvalid := memBarrier.io.outException
 
   // -----------------------------------------

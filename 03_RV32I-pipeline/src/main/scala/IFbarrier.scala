@@ -19,7 +19,6 @@ Outputs:
 Functionality:
     Save all input signals to a register and output them in the following clock cycle
 */
-
 package core_tile
 
 import chisel3._
@@ -31,11 +30,15 @@ import chisel3._
 class IFBarrier extends Module {
   val io = IO(new Bundle {
     val inInstr  = Input(UInt(32.W))
+    val inPC     = Input(UInt(32.W))
+    val flush    = Input(Bool())
+
     val outInstr = Output(UInt(32.W))
+    val outPC    = Output(UInt(32.W))
   })
 
-//ToDo: Add your implementation according to the specification above here 
-  val instrReg = RegInit(0.U(32.W))
-  instrReg := io.inInstr
-  io.outInstr := instrReg
+  val nopInstr = "h00000013".U(32.W) // addi x0, x0, 0
+
+  io.outInstr := RegNext(Mux(io.flush, nopInstr, io.inInstr), nopInstr)
+  io.outPC    := RegNext(Mux(io.flush, 0.U, io.inPC), 0.U)
 }

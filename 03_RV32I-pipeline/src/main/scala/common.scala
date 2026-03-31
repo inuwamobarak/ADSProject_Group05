@@ -40,4 +40,10 @@ object uopc extends ChiselEnum {
   val ADDI, XORI, ORI, ANDI = Value
   val SLLI, SRLI, SRAI = Value
   val SLTI, SLTIU = Value
+
+  // B-Type 
+  val BEQ, BNE, BLT, BGE, BLTU, BGEU = Value
+
+  //J-type / I- type Jump
+  val JAL, JALR = Value
 }
